@@ -1,6 +1,5 @@
 ﻿using IMC_CodeTest_WebAPI.Models.API;
 
-
 namespace IMC_CodeTest_WebAPI.TaxCalculators
 {
     /// <summary>

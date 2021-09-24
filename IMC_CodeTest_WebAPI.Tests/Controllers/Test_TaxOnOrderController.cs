@@ -1,11 +1,12 @@
 ﻿using IMC_CodeTest_WebAPI.Controllers;
-using IMC_CodeTest_WebAPI.Models;
 using IMC_CodeTest_WebAPI.Models.API;
 using IMC_CodeTest_WebAPI.TaxCalculators;
-using IMC_CodeTest_WebAPI.Tests.Mocks;
+using IMC_CodeTest_WebAPI.TaxCalculators.Interfaces;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using Moq;
 
 using System.Net;
 
@@ -15,29 +16,27 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
     public class Test_TaxOnOrderController
     {
         /// <summary>
-        /// Setup Mocks for a basic success scenario
+        /// Sets up a Mock TaxCalculatorSelector
         /// </summary>
-        /// <param name="selector">A selector that returns a calculator for the taxJar calcualtor, that returns a basic "success" result/</param>
-        protected void SetupSuccess(out MockCalculatorSelector selector)
+        /// <param name="response">The response for taxcalculator that will be returned from thw selector</param>
+        protected static ITaxCalculatorSelector Setup(TaxOnOrderResponse response)
         { 
-            MockCalculator calculator = new MockCalculator();
-            calculator.OrderResponse = new TaxOnOrderResponse()
-            { 
-                Error=null, 
-                TaxResponseValues = new TaxResponse()
-                { 
-                    amount_to_collect = 10.99M
-                } 
-            };
+            Mock<ITaxCalculator> calculator = new Mock<ITaxCalculator>();
+            calculator.
+                Setup((c) => c.CalculateTaxesForOrder(It.IsAny<Order>())).
+                Returns(response);
 
-            selector = new MockCalculatorSelector();
-            selector.SetCalculator(TaxCalculatorDesignation.TaxJar, calculator);
+            Mock<ITaxCalculatorSelector> selector = new Mock<ITaxCalculatorSelector>();
+            selector.Setup(s => s.SelectCalculator(It.IsAny<TaxCalculatorDesignation>())).Returns(calculator.Object);
+
+            return selector.Object;
         }
 
         protected static Order MockOrder = new Order
         { 
             amount = 100.00M
         };
+
 
         /// <summary>
         /// When:
@@ -50,8 +49,12 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void Success()
         {
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            ITaxCalculatorSelector calcSelect = Setup(new TaxOnOrderResponse()
+                {
+                    Error = null, 
+                    TaxResponseValues= new TaxResponse(){ amount_to_collect=10.99M }  
+                }
+            );
 
             TaxOnOrderController controller = new TaxOnOrderController(calcSelect);
 
@@ -74,8 +77,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void BodyIsNotReceived()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            ITaxCalculatorSelector calcSelect = Setup(null);
 
             TaxOnOrderController controller = new TaxOnOrderController(calcSelect);
 
@@ -90,6 +92,8 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
             Assert.IsNull(((ErrorResponse)(((BadRequestObjectResult)result).Value)).error_detail);
         }
 
+
+
         /// <summary>
         /// When:
         ///     The tax calculator service has a fatal error
@@ -100,12 +104,15 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void TaxCalculatorInternalError()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            Mock<ITaxCalculator> calculator = new Mock<ITaxCalculator>();
+            calculator.
+                Setup((c) => c.CalculateTaxesForOrder(It.IsAny<Order>())).
+                Throws(new System.Exception("CalculateTaxesForOrder - intentional Exception"));
 
-            calcSelect.ReplaceCalculator(TaxCalculatorDesignation.TaxJar, new MockCalculator_Exception());
+            Mock<ITaxCalculatorSelector> selector = new Mock<ITaxCalculatorSelector>();
+            selector.Setup(s => s.SelectCalculator(It.IsAny<TaxCalculatorDesignation>())).Returns(calculator.Object);
 
-            TaxOnOrderController controller = new TaxOnOrderController(calcSelect);
+            TaxOnOrderController controller = new TaxOnOrderController(selector.Object);
 
             //Run
             IActionResult result = controller.Post(MockOrder);
@@ -115,7 +122,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
             Assert.IsInstanceOfType(((ObjectResult)result).Value, typeof(ErrorResponse));
             Assert.AreEqual(HttpStatusCode.FailedDependency, ((ErrorResponse)(((ObjectResult)result).Value)).status_code);
             Assert.AreEqual(TaxOnOrderController.TaxServiceInternalErrorText, ((ErrorResponse)(((ObjectResult)result).Value)).description);
-            Assert.AreEqual(MockCalculator_Exception.OrderExceptionText, ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
+            Assert.AreEqual("CalculateTaxesForOrder - intentional Exception", ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
         }
 
         /// <summary>
@@ -127,10 +134,13 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         [TestMethod]
         public void TaxCalculatorNoResults()
         { 
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
-
-            calcSelect.ReplaceCalculator(TaxCalculatorDesignation.TaxJar, new MockCalculator_NoResults());
+            //Setup
+            ITaxCalculatorSelector calcSelect = Setup(new TaxOnOrderResponse()
+                {
+                    Error = "Mock Taxes Error", 
+                    TaxResponseValues= null  
+                }
+            );
 
             TaxOnOrderController controller = new TaxOnOrderController(calcSelect);
 
@@ -142,7 +152,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
             Assert.IsInstanceOfType(((ObjectResult)result).Value, typeof(ErrorResponse));
             Assert.AreEqual(HttpStatusCode.BadRequest, ((ErrorResponse)(((ObjectResult)result).Value)).status_code);
             Assert.AreEqual(TaxOnOrderController.TaxServiceCouldNotProcessRequest, ((ErrorResponse)(((ObjectResult)result).Value)).description);
-            Assert.AreEqual(MockCalculator_NoResults.TaxesResponse.Error, ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
+            Assert.AreEqual("Mock Taxes Error", ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
         }
     }
 }

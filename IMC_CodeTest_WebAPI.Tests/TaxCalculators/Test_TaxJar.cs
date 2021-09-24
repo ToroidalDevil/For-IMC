@@ -5,7 +5,6 @@ using IMC_CodeTest_WebAPI.TaxCalculators;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Moq;
-using Newtonsoft.Json;
 using RestSharp;
 
 using System;
@@ -23,7 +22,7 @@ namespace IMC_CodeTest_WebAPI.Tests.TaxCalculators
         /// <param name="content">Content of the response the client returns.</param>
         /// <param name="status">Status code the client returns.</param>
         /// <returns>The mocked client</returns>
-        public static Mock<IRestClient> SetupClientForRates(string content, HttpStatusCode status, Exception exception = null, string errorMessage = null)
+        protected static Mock<IRestClient> SetupClientForRates(string content, HttpStatusCode status, Exception exception = null, string errorMessage = null)
         { 
             Mock<IRestClient> client = new Mock<IRestClient>();
             client.

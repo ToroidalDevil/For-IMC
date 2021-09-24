@@ -2,10 +2,12 @@
 using IMC_CodeTest_WebAPI.Controllers;
 using IMC_CodeTest_WebAPI.Models.API;
 using IMC_CodeTest_WebAPI.TaxCalculators;
-using IMC_CodeTest_WebAPI.Tests.Mocks;
+using IMC_CodeTest_WebAPI.TaxCalculators.Interfaces;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using Moq;
 
 using System.Net;
 
@@ -15,23 +17,26 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
     public class Test_TaxRateController
     {
         /// <summary>
-        /// Setup Mocks for a basic success scenario
+        /// Generates a Mock TaxCalculatorSelector. Sets up the response for the GetTaxRates call. Returns the response provided.
         /// </summary>
-        /// <param name="selector">A selector that returns a calculator for the taxJar calcualtor, that returns a basic "success" result/</param>
-        protected void SetupSuccess(out MockCalculatorSelector selector)
+        /// <param name="response">The response to be returned from the TaxCalculators call to GetTaxRates</param>
+        /// <returns>Mocked TaxCalculatorSelector</returns>
+        protected ITaxCalculatorSelector Setup(TaxRateResponse response)
         { 
-            MockCalculator calculator = new MockCalculator();
-            calculator.RateResponse = new TaxRateResponse()
-            { 
-                Error=null, 
-                RateResponseValues= new RateResponse()
-                { 
-                    city = "mock"
-                } 
-            };
+            Mock<ITaxCalculator> calculator = new Mock<ITaxCalculator>();
+            calculator.
+                Setup(c=> c.GetTaxRates(
+                    It.Is<string>(s => !string.IsNullOrWhiteSpace(s)), 
+                    It.Is<string>(s => !string.IsNullOrWhiteSpace(s)),
+                    It.Is<string>(s => !string.IsNullOrWhiteSpace(s)))).
+                Returns(response);
 
-            selector = new MockCalculatorSelector();
-            selector.SetCalculator(TaxCalculatorDesignation.TaxJar, calculator);
+            Mock<ITaxCalculatorSelector> selector = new Mock<ITaxCalculatorSelector>();
+            selector.
+                Setup(s => s.SelectCalculator(It.IsAny<TaxCalculatorDesignation>())).
+                Returns(calculator.Object);
+
+            return selector.Object;
         }
 
         /// <summary>
@@ -45,8 +50,12 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void Success()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            ITaxCalculatorSelector calcSelect = Setup(new TaxRateResponse()
+                {
+                    Error=null, 
+                    RateResponseValues = new RateResponse(){city="mock"} 
+                }
+            );
 
             TaxRateController controller = new TaxRateController(calcSelect);
 
@@ -69,8 +78,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void QueryParamIsInValid_City()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            ITaxCalculatorSelector calcSelect = Setup(null);
 
             TaxRateController controller = new TaxRateController(calcSelect);
 
@@ -95,8 +103,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void QueryParamIsInValid_State()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            ITaxCalculatorSelector calcSelect = Setup(null);
 
             TaxRateController controller = new TaxRateController(calcSelect);
 
@@ -121,8 +128,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void QueryParamIsInValid_Zip()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            ITaxCalculatorSelector calcSelect = Setup(null);
 
             TaxRateController controller = new TaxRateController(calcSelect);
 
@@ -147,12 +153,18 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void TaxCalculatorInternalError()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
+            Mock<ITaxCalculator> calculator = new Mock<ITaxCalculator>();
+            calculator.
+                Setup(c=> c.GetTaxRates(
+                    It.Is<string>(s => !string.IsNullOrWhiteSpace(s)), 
+                    It.Is<string>(s => !string.IsNullOrWhiteSpace(s)),
+                    It.Is<string>(s => !string.IsNullOrWhiteSpace(s)))).
+                Throws(new System.Exception("GetTaxRates - intentional Exception"));
 
-            calcSelect.ReplaceCalculator(TaxCalculatorDesignation.TaxJar, new MockCalculator_Exception());
+            Mock<ITaxCalculatorSelector> calcSelect = new Mock<ITaxCalculatorSelector>();
+            calcSelect.Setup(s => s.SelectCalculator(It.IsAny<TaxCalculatorDesignation>())).Returns(calculator.Object);
 
-            TaxRateController controller = new TaxRateController(calcSelect);
+            TaxRateController controller = new TaxRateController(calcSelect.Object);
 
             //Run
             IActionResult result = controller.Get("T-zip", "T-country", "T-city");
@@ -162,7 +174,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
             Assert.IsInstanceOfType(((ObjectResult)result).Value, typeof(ErrorResponse));
             Assert.AreEqual(HttpStatusCode.FailedDependency, ((ErrorResponse)(((ObjectResult)result).Value)).status_code);
             Assert.AreEqual(TaxRateController.TaxServiceInternalErrorText, ((ErrorResponse)(((ObjectResult)result).Value)).description);
-            Assert.AreEqual(MockCalculator_Exception.RateExceptionText, ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
+            Assert.AreEqual("GetTaxRates - intentional Exception", ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
         }
 
         /// <summary>
@@ -175,10 +187,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
         public void TaxCalculatorNoResults()
         { 
             //Setup
-            MockCalculatorSelector calcSelect = new MockCalculatorSelector();
-            SetupSuccess(out calcSelect);
-
-            calcSelect.ReplaceCalculator(TaxCalculatorDesignation.TaxJar, new MockCalculator_NoResults());
+            ITaxCalculatorSelector calcSelect = Setup(new TaxRateResponse(){Error= "Mock Rates Error", RateResponseValues= null});
 
             TaxRateController controller = new TaxRateController(calcSelect);
 
@@ -190,7 +199,7 @@ namespace IMC_CodeTest_WebAPI.Tests.Controllers
             Assert.IsInstanceOfType(((ObjectResult)result).Value, typeof(ErrorResponse));
             Assert.AreEqual(HttpStatusCode.BadRequest, ((ErrorResponse)(((ObjectResult)result).Value)).status_code);
             Assert.AreEqual(TaxRateController.TaxServiceCouldNotProcessRequest, ((ErrorResponse)(((ObjectResult)result).Value)).description);
-            Assert.AreEqual(MockCalculator_NoResults.RatesResponse.Error, ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
+            Assert.AreEqual("Mock Rates Error", ((ErrorResponse)(((ObjectResult)result).Value)).error_detail);
         }
     }
 }
