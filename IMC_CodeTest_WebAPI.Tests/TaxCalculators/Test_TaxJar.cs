@@ -5,6 +5,7 @@ using IMC_CodeTest_WebAPI.TaxCalculators;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Moq;
+using Newtonsoft.Json;
 using RestSharp;
 
 using System;
@@ -75,6 +76,15 @@ namespace IMC_CodeTest_WebAPI.Tests.TaxCalculators
             Assert.IsNotNull(trResponse.RateResponseValues);
             Assert.IsNull(trResponse.Error);
             Assert.AreEqual("90404", trResponse.RateResponseValues.zip);
+            Assert.AreEqual("CA", trResponse.RateResponseValues.state);
+            Assert.AreEqual(0.0625M, trResponse.RateResponseValues.state_rate);
+            Assert.AreEqual("LOS ANGELES", trResponse.RateResponseValues.county);
+            Assert.AreEqual(0.01M, trResponse.RateResponseValues.county_rate);
+            Assert.AreEqual("SANTA MONICA", trResponse.RateResponseValues.city);
+            Assert.AreEqual(0.0M, trResponse.RateResponseValues.city_rate);
+            Assert.AreEqual(0.025M, trResponse.RateResponseValues.combined_district_rate);
+            Assert.AreEqual(0.0975M, trResponse.RateResponseValues.combined_rate);
+            Assert.AreEqual(false, trResponse.RateResponseValues.freight_taxable);
         }
 
         /// <summary>
@@ -243,10 +253,66 @@ namespace IMC_CodeTest_WebAPI.Tests.TaxCalculators
             Assert.IsNotNull(tooResponse.TaxResponseValues);
             Assert.IsNull(tooResponse.Error);
 
+            //Response
+            Assert.AreEqual(1.71M, tooResponse.TaxResponseValues.amount_to_collect);
+            Assert.AreEqual(true, tooResponse.TaxResponseValues.freight_taxable);
+            Assert.AreEqual(true, tooResponse.TaxResponseValues.has_nexus);
+            Assert.AreEqual(29.95M, tooResponse.TaxResponseValues.order_total_amount);
+            Assert.AreEqual(0.05711M, tooResponse.TaxResponseValues.rate);
+            Assert.AreEqual(10M, tooResponse.TaxResponseValues.shipping);
             Assert.AreEqual("destination", tooResponse.TaxResponseValues.tax_source);
+            Assert.AreEqual(29.95M, tooResponse.TaxResponseValues.taxable_amount);
+
+            //Response.Jurisdictions
+            Assert.AreEqual("MAHOPAC", tooResponse.TaxResponseValues.jurisdictions.city);
+            Assert.AreEqual("US", tooResponse.TaxResponseValues.jurisdictions.country);
+            Assert.AreEqual("PUTNAM", tooResponse.TaxResponseValues.jurisdictions.county);
+            Assert.AreEqual("NY", tooResponse.TaxResponseValues.jurisdictions.state);
+
+            //Response.Breakdown
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.special_district_tax_collectable);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.special_district_taxable_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.special_tax_rate);
+            Assert.AreEqual(0.4M, tooResponse.TaxResponseValues.breakdown.state_tax_collectable);
             Assert.AreEqual(0.04M, tooResponse.TaxResponseValues.breakdown.state_tax_rate);
+            Assert.AreEqual(10M, tooResponse.TaxResponseValues.breakdown.state_taxable_amount);
+            Assert.AreEqual(1.71M, tooResponse.TaxResponseValues.breakdown.tax_collectable);
+            Assert.AreEqual(29.95M, tooResponse.TaxResponseValues.breakdown.taxable_amount);
+
+            //Response.breakdown.shipping
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.shipping.city_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.shipping.city_tax_rate);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.shipping.city_taxable_amount);
             Assert.AreEqual(0.08375M, tooResponse.TaxResponseValues.breakdown.shipping.combined_tax_rate);
+            Assert.AreEqual(0.44M, tooResponse.TaxResponseValues.breakdown.shipping.county_amount);
+            Assert.AreEqual(0.04375M, tooResponse.TaxResponseValues.breakdown.shipping.county_tax_rate);
+            Assert.AreEqual(10M, tooResponse.TaxResponseValues.breakdown.shipping.county_taxable_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.shipping.special_district_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.shipping.special_tax_rate);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.shipping.special_taxable_amount);
+            Assert.AreEqual(0.4M, tooResponse.TaxResponseValues.breakdown.shipping.state_amount);
+            Assert.AreEqual(0.04M, tooResponse.TaxResponseValues.breakdown.shipping.state_sales_tax_rate);
+            Assert.AreEqual(10M, tooResponse.TaxResponseValues.breakdown.shipping.state_taxable_amount);
+            Assert.AreEqual(0.84M, tooResponse.TaxResponseValues.breakdown.shipping.tax_collectable);
+            Assert.AreEqual(10M, tooResponse.TaxResponseValues.breakdown.shipping.taxable_amount);
+
+            //Response.breakdown.lineitem[0]
             Assert.AreEqual(1, tooResponse.TaxResponseValues.breakdown.line_items.Length);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].city_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].city_tax_rate);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].city_taxable_amount);
+            Assert.AreEqual(0.04375M, tooResponse.TaxResponseValues.breakdown.line_items[0].combined_tax_rate);
+            Assert.AreEqual(0.87M, tooResponse.TaxResponseValues.breakdown.line_items[0].county_amount);
+            Assert.AreEqual(0.04375M, tooResponse.TaxResponseValues.breakdown.line_items[0].county_tax_rate);
+            Assert.AreEqual(19.95M, tooResponse.TaxResponseValues.breakdown.line_items[0].county_taxable_amount);
+            Assert.AreEqual("1", tooResponse.TaxResponseValues.breakdown.line_items[0].id);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].special_district_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].special_district_taxable_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].special_tax_rate);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].state_amount);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].state_sales_tax_rate);
+            Assert.AreEqual(0M, tooResponse.TaxResponseValues.breakdown.line_items[0].state_taxable_amount);
+            Assert.AreEqual(0.87M, tooResponse.TaxResponseValues.breakdown.line_items[0].tax_collectable);
             Assert.AreEqual(19.95M, tooResponse.TaxResponseValues.breakdown.line_items[0].taxable_amount);
         }
 
